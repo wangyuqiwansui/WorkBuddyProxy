@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WorkBuddy 代理助手</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card">
+        <header class="card-header">
+          <h1>OpenAI Codex</h1>
+          <span id="statusBadge" class="status-badge">未配置</span>
+        </header>
+
+        <div class="meta-lines">
+          <div id="modelText">当前模型：-</div>
+          <div id="endpointText">接口地址：https://chatgpt.com/backend-api</div>
+        </div>
+
+        <span class="oauth-pill">OAuth</span>
+        <div id="loginText" class="login-text">登录账号：未登录</div>
+
+        <div id="notice" class="notice">未接通 OAuth 登录。请点击“管理登录”完成浏览器登录。</div>
+
+        <div class="quota-box">
+          <div class="quota-title">余额</div>
+          <div class="quota-copy">当前厂商暂未接入可程序化余额查询。</div>
+        </div>
+
+        <div class="model-picker">
+          <label for="modelSelect">使用模型</label>
+          <select id="modelSelect"></select>
+        </div>
+        <div id="modelCount" class="model-count">下拉切换当前使用模型</div>
+
+        <div class="proxy-panel">
+          <div class="proxy-head">
+            <div>
+              <div class="proxy-title">本地 WorkBuddy 代理</div>
+              <div id="proxyStatusText" class="proxy-status">未开启</div>
+            </div>
+            <div class="proxy-actions">
+              <button id="startProxyButton" class="primary">开启代理</button>
+              <button id="stopProxyButton">停止代理</button>
+              <button id="copyButton">复制配置</button>
+            </div>
+          </div>
+
+          <div class="proxy-grid">
+            <div class="proxy-field" data-copy-field="host" role="button" tabindex="0" title="双击复制本地 IP">
+              <span>本地 IP</span>
+              <code id="proxyHost">127.0.0.1</code>
+            </div>
+            <div class="proxy-field" data-copy-field="port" role="button" tabindex="0" title="双击复制端口">
+              <span>端口</span>
+              <code id="proxyPort">8765</code>
+            </div>
+            <div class="proxy-field wide" data-copy-field="apiUrl" role="button" tabindex="0" title="双击复制接口地址">
+              <span>接口地址</span>
+              <code id="proxyApiUrl">http://127.0.0.1:8765/v1</code>
+            </div>
+            <div class="proxy-field wide" data-copy-field="apiKey" role="button" tabindex="0" title="双击复制 API Key">
+              <span>API Key</span>
+              <code id="proxyApiKey">-</code>
+            </div>
+          </div>
+          <div class="proxy-hint">双击任意字段复制对应值。开启后，WorkBuddy 请求会转发到 OpenAI Codex 并把返回结果代理回本地。</div>
+        </div>
+
+        <div class="button-row">
+          <button id="loginButton" class="primary">管理登录</button>
+          <button id="testButton">测试连接</button>
+          <button id="refreshModelsButton">刷新模型</button>
+          <button id="refreshBalanceButton">刷新余额</button>
+        </div>
+      </section>
+
+      <section class="log-section">
+        <h2>运行日志</h2>
+        <pre id="logBox"></pre>
+      </section>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

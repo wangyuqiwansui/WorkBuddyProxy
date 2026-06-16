@@ -1,0 +1,76 @@
+{
+  "name": "workbuddy-proxy-app",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Electron desktop app for WorkBuddy Codex Auto proxy.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "pack": "node scripts/electron-builder-with-retry.js --dir",
+    "dist": "node scripts/electron-builder-with-retry.js --win nsis portable --mac dmg zip",
+    "dist:all": "node scripts/electron-builder-with-retry.js --win nsis portable --mac dmg zip",
+    "dist:win": "node scripts/electron-builder-with-retry.js --win nsis portable",
+    "dist:mac": "node scripts/electron-builder-with-retry.js --mac dmg zip"
+  },
+  "build": {
+    "appId": "com.workbuddy.proxy",
+    "productName": "WorkBuddyProxy",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "renderer/**/*",
+      "lib/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "39.8.10",
+    "electron-builder": "^26.15.3"
+  }
+}

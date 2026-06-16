@@ -1,0 +1,13 @@
+node_modules/
+.p/
+.cache/
+dist/
+*.log
+qt_layout_check.png
+__pycache__/
+config.json
+auth.json
+.env
+.env.*
+!.env.example
+WorkBuddyProxy/

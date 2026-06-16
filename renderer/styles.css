@@ -1,0 +1,283 @@
+:root {
+  color-scheme: light;
+  font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  color: #061429;
+  background: #f5fffb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 820px;
+  background: #f5fffb;
+}
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+}
+
+.card {
+  border: 1px solid #76e4c6;
+  border-radius: 12px;
+  background: #f2fffb;
+  padding: 18px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+h2 {
+  margin: 0 0 8px;
+  color: #315375;
+  font-size: 13px;
+}
+
+.status-badge,
+.oauth-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: #059669;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.oauth-pill {
+  margin-top: 8px;
+  background: #071326;
+}
+
+.meta-lines,
+.login-text {
+  margin-top: 9px;
+  color: #315375;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.notice {
+  margin-top: 12px;
+  border: 1px solid #b8d4ff;
+  border-radius: 8px;
+  background: #eaf3ff;
+  color: #174a9c;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.quota-box {
+  margin-top: 12px;
+  border: 1px dashed #d8e8e4;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 12px;
+}
+
+.quota-title {
+  color: #315375;
+  font-size: 13px;
+}
+
+.quota-copy,
+.model-count {
+  margin-top: 5px;
+  color: #6b7f95;
+  font-size: 13px;
+}
+
+.model-picker {
+  display: grid;
+  grid-template-columns: auto minmax(260px, 420px);
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.model-picker label {
+  color: #315375;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+select {
+  height: 38px;
+  border: 1px solid #d6ebe5;
+  border-radius: 10px;
+  background: #fff;
+  color: #061429;
+  padding: 0 12px;
+  font: 700 13px "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  outline: none;
+}
+
+select:focus {
+  border-color: #42cba6;
+  box-shadow: 0 0 0 3px rgba(66, 203, 166, 0.18);
+}
+
+.button-row,
+.proxy-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.button-row {
+  margin-top: 14px;
+}
+
+.proxy-panel {
+  margin-top: 14px;
+  border: 1px solid #d6ebe5;
+  border-radius: 8px;
+  background: #fbfffe;
+  padding: 12px;
+}
+
+.proxy-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.proxy-title {
+  color: #061429;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.proxy-status {
+  margin-top: 5px;
+  color: #9a3412;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.proxy-status.running {
+  color: #047857;
+}
+
+.proxy-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.proxy-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(110px, 0.6fr) minmax(240px, 1.2fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.proxy-field {
+  min-height: 58px;
+  border: 1px solid #dbe8ef;
+  border-radius: 8px;
+  background: #fff;
+  padding: 9px 10px;
+  cursor: copy;
+}
+
+.proxy-field.wide {
+  grid-column: 1 / -1;
+}
+
+.proxy-field:hover,
+.proxy-field:focus {
+  border-color: #42cba6;
+  box-shadow: 0 0 0 3px rgba(66, 203, 166, 0.14);
+  outline: none;
+}
+
+.proxy-field span {
+  display: block;
+  color: #6b7f95;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.proxy-field code {
+  display: block;
+  margin-top: 5px;
+  color: #061429;
+  font: 700 12px Consolas, "Microsoft YaHei UI", monospace;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.proxy-hint {
+  margin-top: 8px;
+  color: #6b7f95;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+button {
+  min-height: 36px;
+  border: 1px solid #dbe8ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #061429;
+  padding: 8px 14px;
+  font: 700 13px "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #eef7ff;
+}
+
+button.primary {
+  border-color: #071326;
+  background: #071326;
+  color: #fff;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.log-section {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+#logBox {
+  flex: 1;
+  min-height: 160px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid #dbe8ef;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  font: 12px Consolas, "Microsoft YaHei UI", monospace;
+}
