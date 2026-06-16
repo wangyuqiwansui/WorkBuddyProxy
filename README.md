@@ -4,6 +4,8 @@
 
 本项目不依赖每次请求启动 `codex app-server`，也不需要在 WorkBuddy 里填写 OpenAI API Key。
 
+可以直接开启 WorkBuddyProxy Setup 0.2.0.exe 使用
+
 ## 当前能力
 
 - OpenAI Codex OAuth 浏览器登录。
