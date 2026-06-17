@@ -15,6 +15,12 @@ const {
   normalizeReasoningEffortValue,
   resolveReasoningEffort,
 } = require("./lib/reasoningEffort");
+const {
+  chatCompletionFromCodexResult,
+  codexToolOptionsFromPayload,
+  responseToolCallsFromResponse,
+  responsesFromCodexResult,
+} = require("./lib/toolBridge");
 
 const APP_NAME = "WorkBuddyProxy";
 const CONFIG_DIR = path.join(process.env.APPDATA || os.homedir(), APP_NAME);
@@ -433,6 +439,20 @@ function messagesToCodexInput(messages) {
       if (text) developerParts.push(text);
       continue;
     }
+    if (role === "assistant") {
+      if (text) transcriptParts.push(`Assistant: ${text}`);
+      for (const call of message.tool_calls || []) {
+        const name = String(call?.function?.name || "").trim();
+        const args = String(call?.function?.arguments || "{}");
+        if (name) transcriptParts.push(`Assistant tool call ${call.id || ""}: ${name}(${args})`.trim());
+      }
+      continue;
+    }
+    if (role === "tool") {
+      const toolLabel = String(message.name || message.tool_call_id || "Tool").trim();
+      if (text) transcriptParts.push(`Tool ${toolLabel}: ${text}`);
+      continue;
+    }
     const label = { assistant: "Assistant", tool: "Tool", function: "Tool", user: "User" }[role] || role;
     if (text) transcriptParts.push(`${label}: ${text}`);
   }
@@ -538,6 +558,8 @@ function isUnsupportedModelError(error) {
 async function runCodexWithModel(model, developerInstructions, inputItems, onDelta, options = {}) {
   const forceRefresh = Boolean(options.forceRefresh);
   const effortValue = normalizeReasoningEffortValue(options.reasoningEffort?.value || options.reasoningEffort) || DEFAULT_REASONING_EFFORT;
+  const toolOptions = options.toolOptions || {};
+  const hasTools = Boolean(toolOptions.hasTools);
   const accessToken = await getAccessToken(forceRefresh);
   const accountId = extractCodexAccountId(accessToken);
   const { instructions, messages } = buildCodexContext(developerInstructions, inputItems);
@@ -550,9 +572,10 @@ async function runCodexWithModel(model, developerInstructions, inputItems, onDel
     reasoning: { effort: effortValue },
     text: { verbosity: "medium" },
     include: ["reasoning.encrypted_content"],
-    tool_choice: "none",
-    parallel_tool_calls: false,
+    tool_choice: hasTools ? toolOptions.tool_choice || "auto" : "none",
+    parallel_tool_calls: hasTools ? Boolean(toolOptions.parallel_tool_calls) : false,
   };
+  if (hasTools) body.tools = toolOptions.tools;
   const requestId = crypto.randomBytes(16).toString("hex");
   const response = await codexFetch(CODEX_BACKEND_URL, {
     method: "POST",
@@ -574,6 +597,7 @@ async function runCodexWithModel(model, developerInstructions, inputItems, onDel
     if ((response.status === 401 || response.status === 403) && !forceRefresh) {
       return runCodexWithModel(model, developerInstructions, inputItems, onDelta, {
         reasoningEffort: effortValue,
+        toolOptions,
         forceRefresh: true,
       });
     }
@@ -582,6 +606,8 @@ async function runCodexWithModel(model, developerInstructions, inputItems, onDel
 
   const chunks = [];
   let finalText = "";
+  let finalResponse = null;
+  const toolCallItems = [];
   await parseSse(response, (event) => {
     const type = String(event.type || "");
     if (type === "error") throw new Error(event.message || JSON.stringify(event));
@@ -590,14 +616,25 @@ async function runCodexWithModel(model, developerInstructions, inputItems, onDel
       chunks.push(event.delta);
       onDelta?.(event.delta);
     }
+    if ((type === "response.output_item.done" || type === "response.output_item.completed") && event.item?.type === "function_call") {
+      toolCallItems.push(event.item);
+    }
     if (type === "response.completed" || type === "response.done" || type === "response.incomplete") {
+      finalResponse = event.response || null;
       finalText = extractResponseText(event.response);
     }
   });
-  return chunks.join("").trim() || finalText.trim();
+  const idFactory = () => `call_${crypto.randomBytes(12).toString("base64url")}`;
+  const toolCalls = responseToolCallsFromResponse(finalResponse, idFactory);
+  const fallbackToolCalls = toolCalls.length ? toolCalls : responseToolCallsFromResponse({ output: toolCallItems }, idFactory);
+  return {
+    model,
+    text: chunks.join("").trim() || finalText.trim(),
+    toolCalls: fallbackToolCalls,
+  };
 }
 
-async function runCodex(model, developerInstructions, inputItems, onDelta, reasoningEffort) {
+async function runCodex(model, developerInstructions, inputItems, onDelta, reasoningEffort, toolOptions) {
   const candidates = [];
   for (const candidate of [model, ...CODEX_CHATGPT_FALLBACK_MODELS]) {
     if (candidate && !candidates.includes(candidate)) candidates.push(candidate);
@@ -606,7 +643,7 @@ async function runCodex(model, developerInstructions, inputItems, onDelta, reaso
   for (const candidate of candidates) {
     try {
       if (candidate !== model) log(`模型 ${model} 不受当前 ChatGPT Codex 账号支持，自动改用 ${candidate} 重试。`);
-      return await runCodexWithModel(candidate, developerInstructions, inputItems, onDelta, { reasoningEffort });
+      return await runCodexWithModel(candidate, developerInstructions, inputItems, onDelta, { reasoningEffort, toolOptions });
     } catch (error) {
       lastError = error;
       if (!isUnsupportedModelError(error)) throw error;
@@ -681,6 +718,7 @@ async function handleProxyRequest(req, res) {
     const payload = JSON.parse((await readBody(req)) || "{}");
     const model = resolveCodexModel(proxy, payload.model);
     const reasoningEffort = resolveReasoningEffort(payload, proxy.reasoning_effort);
+    const toolOptions = codexToolOptionsFromPayload(payload);
     const messageCount = Array.isArray(payload.messages) ? payload.messages.length : Array.isArray(payload.input) ? payload.input.length : 1;
     log(proxyRequestLog({
       requestId,
@@ -709,72 +747,92 @@ async function handleProxyRequest(req, res) {
           object: "chat.completion.chunk",
           created: Math.floor(Date.now() / 1000),
           model,
-          choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }],
-        });
-        await runCodex(model, developerInstructions, inputItems, (delta) => {
-          streamedTextLength += String(delta || "").length;
-          sendChunk({
-            id: completionId,
-            object: "chat.completion.chunk",
-            created: Math.floor(Date.now() / 1000),
-            model,
-            choices: [{ index: 0, delta: { content: delta }, finish_reason: null }],
+            choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }],
           });
-        }, reasoningEffort);
+        const result = toolOptions.hasTools
+          ? await runCodex(model, developerInstructions, inputItems, undefined, reasoningEffort, toolOptions)
+          : await runCodex(model, developerInstructions, inputItems, (delta) => {
+            streamedTextLength += String(delta || "").length;
+            sendChunk({
+              id: completionId,
+              object: "chat.completion.chunk",
+              created: Math.floor(Date.now() / 1000),
+              model,
+              choices: [{ index: 0, delta: { content: delta }, finish_reason: null }],
+            });
+          }, reasoningEffort, toolOptions);
+        if (toolOptions.hasTools) {
+          if (result.toolCalls.length) {
+            sendChunk({
+              id: completionId,
+              object: "chat.completion.chunk",
+              created: Math.floor(Date.now() / 1000),
+              model: result.model,
+              choices: [{
+                index: 0,
+                delta: {
+                  tool_calls: result.toolCalls.map((call, index) => ({
+                    index,
+                    id: call.id,
+                    type: "function",
+                    function: call.function,
+                  })),
+                },
+                finish_reason: null,
+              }],
+            });
+          } else if (result.text) {
+            streamedTextLength += String(result.text).length;
+            sendChunk({
+              id: completionId,
+              object: "chat.completion.chunk",
+              created: Math.floor(Date.now() / 1000),
+              model: result.model,
+              choices: [{ index: 0, delta: { content: result.text }, finish_reason: null }],
+            });
+          }
+        }
         sendChunk({
           id: completionId,
           object: "chat.completion.chunk",
           created: Math.floor(Date.now() / 1000),
-          model,
-          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+          model: result.model,
+          choices: [{ index: 0, delta: {}, finish_reason: result.toolCalls.length ? "tool_calls" : "stop" }],
         });
         res.write("data: [DONE]\n\n");
         res.end();
         log(proxyResponseLog({
           requestId,
           status: 200,
-          codexModel: model,
+          codexModel: result.model,
           reasoningEffort,
-          textLength: streamedTextLength,
+          textLength: result.toolCalls.length ? 0 : streamedTextLength,
           durationMs: Date.now() - startedAt,
         }));
         return;
       }
-      const text = await runCodex(model, developerInstructions, inputItems, undefined, reasoningEffort);
-      sendJson(res, 200, {
-        id: `chatcmpl-${crypto.randomBytes(12).toString("base64url")}`,
-        object: "chat.completion",
-        created: Math.floor(Date.now() / 1000),
-        model,
-        choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }],
-      });
+      const result = await runCodex(model, developerInstructions, inputItems, undefined, reasoningEffort, toolOptions);
+      sendJson(res, 200, chatCompletionFromCodexResult(result, () => `chatcmpl-${crypto.randomBytes(12).toString("base64url")}`));
       log(proxyResponseLog({
         requestId,
         status: 200,
-        codexModel: model,
+        codexModel: result.model,
         reasoningEffort,
-        textLength: String(text || "").length,
+        textLength: String(result.text || "").length,
         durationMs: Date.now() - startedAt,
       }));
       return;
     }
 
     const { developerInstructions, inputItems } = responseInputToCodexInput(payload);
-    const text = await runCodex(model, developerInstructions, inputItems, undefined, reasoningEffort);
-    sendJson(res, 200, {
-      id: `resp_${crypto.randomBytes(12).toString("base64url")}`,
-      object: "response",
-      created_at: Math.floor(Date.now() / 1000),
-      model,
-      output_text: text,
-      output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text }] }],
-    });
+    const result = await runCodex(model, developerInstructions, inputItems, undefined, reasoningEffort, toolOptions);
+    sendJson(res, 200, responsesFromCodexResult(result, () => `resp_${crypto.randomBytes(12).toString("base64url")}`));
     log(proxyResponseLog({
       requestId,
       status: 200,
-      codexModel: model,
+      codexModel: result.model,
       reasoningEffort,
-      textLength: String(text || "").length,
+      textLength: String(result.text || "").length,
       durationMs: Date.now() - startedAt,
     }));
   } catch (error) {
@@ -938,13 +996,14 @@ ipcMain.handle("app:testConnection", async () => {
   const proxy = proxyConfig();
   const model = proxy.model_override || proxy.models[0];
   const reasoningEffort = resolveReasoningEffort({}, proxy.reasoning_effort);
-  const text = await runCodex(
+  const result = await runCodex(
     model,
     "You are a connectivity test endpoint. Reply with exactly OK.",
     [{ type: "text", text: "请只回复 OK，用于测试连接。" }],
     undefined,
     reasoningEffort,
   );
+  const text = result.text;
   if (!text) throw new Error("Codex 已响应，但没有返回文本。");
   log(`测试连接成功：Codex 返回 ${text.slice(0, 40)}`);
   return { ok: true, text };

@@ -14,6 +14,7 @@
 - 手动开启 / 停止 WorkBuddy 本地代理。
 - 支持 WorkBuddy 调用 `GET /v1/models`、`POST /v1/chat/completions`、`POST /v1/responses`。
 - 支持非流式和流式 Chat Completions。
+- 支持 OpenAI-compatible function tools 桥接：WorkBuddy 传入 `tools` / `tool_choice` 时，代理会转成 Codex Responses function tools，并把 Codex 返回的 function call 转回 `tool_calls` 给 WorkBuddy 执行。
 - WorkBuddy 自定义模型名自动映射到当前选中的 Codex 模型。
 - 运行日志展示代理请求、模型映射、推理模式、返回状态、输出长度和耗时。
 - Electron 网络请求会优先读取环境变量代理或 Windows 系统代理，避免 OAuth token 交换直连失败。
@@ -91,7 +92,8 @@ npm start
 限制：
 
 - Codex Auto 模式不提供 embeddings；`/v1/embeddings` 会返回错误。
-- 工具调用默认关闭，代理主要返回文本结果。
+- 代理只桥接 OpenAI-compatible function tools，不在本地执行工具；WorkBuddy 收到 `tool_calls` 后仍由 WorkBuddy 自己执行工具并把结果回传。
+- Codex OAuth 后端是否选择调用工具取决于 Codex 模型和后端能力；如果 WorkBuddy 使用 OpenAI 内置工具或 MCP 专用能力，建议继续使用 API Key 模式。
 
 ## OAuth 与本地保存
 
