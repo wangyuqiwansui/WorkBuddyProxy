@@ -5,6 +5,7 @@ const els = {
   loginText: document.querySelector("#loginText"),
   notice: document.querySelector("#notice"),
   modelSelect: document.querySelector("#modelSelect"),
+  reasoningSelect: document.querySelector("#reasoningSelect"),
   modelCount: document.querySelector("#modelCount"),
   loginButton: document.querySelector("#loginButton"),
   testButton: document.querySelector("#testButton"),
@@ -48,8 +49,10 @@ function render(state) {
   const account = state.account || {};
   const proxy = state.proxy || {};
   const selectedModel = state.selectedModel || state.models?.[0] || "-";
+  const selectedReasoningEffort = state.selectedReasoningEffort || "medium";
+  const selectedReasoningLabel = (state.reasoningEfforts || []).find((item) => item.value === selectedReasoningEffort)?.label || "中";
   els.statusBadge.textContent = account.loggedIn ? "已配置" : "未配置";
-  els.modelText.textContent = `当前模型：${selectedModel}`;
+  els.modelText.textContent = `当前模型：${selectedModel}，默认推理：${selectedReasoningLabel}`;
   els.endpointText.textContent = `接口地址：${state.endpoint || "https://chatgpt.com/backend-api"}`;
   if (account.loggedIn) {
     els.loginText.textContent = `登录账号：${account.email || "已保存 OAuth 凭证"}，有效期至 ${account.expiresText || "未知"}`;
@@ -76,7 +79,15 @@ function render(state) {
     option.selected = model === selectedModel;
     els.modelSelect.appendChild(option);
   }
-  els.modelCount.textContent = `下拉切换当前使用模型，共 ${(state.models || []).length} 个模型`;
+  els.reasoningSelect.innerHTML = "";
+  for (const effort of state.reasoningEfforts || []) {
+    const option = document.createElement("option");
+    option.value = effort.value;
+    option.textContent = effort.label;
+    option.selected = effort.value === selectedReasoningEffort;
+    els.reasoningSelect.appendChild(option);
+  }
+  els.modelCount.textContent = `下拉切换当前使用模型，共 ${(state.models || []).length} 个模型；默认推理模式：${selectedReasoningLabel}`;
   rendering = false;
 }
 
@@ -162,6 +173,16 @@ els.modelSelect.addEventListener("change", async () => {
   const model = els.modelSelect.value;
   try {
     render(await window.workbuddy.setModel(model));
+  } catch (error) {
+    appendLog(error?.message || String(error));
+  }
+});
+
+els.reasoningSelect.addEventListener("change", async () => {
+  if (rendering) return;
+  const effort = els.reasoningSelect.value;
+  try {
+    render(await window.workbuddy.setReasoningEffort(effort));
   } catch (error) {
     appendLog(error?.message || String(error));
   }

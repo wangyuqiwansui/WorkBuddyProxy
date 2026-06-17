@@ -15,7 +15,7 @@
 - 支持 WorkBuddy 调用 `GET /v1/models`、`POST /v1/chat/completions`、`POST /v1/responses`。
 - 支持非流式和流式 Chat Completions。
 - WorkBuddy 自定义模型名自动映射到当前选中的 Codex 模型。
-- 运行日志展示代理请求、模型映射、返回状态、输出长度和耗时。
+- 运行日志展示代理请求、模型映射、推理模式、返回状态、输出长度和耗时。
 - Electron 网络请求会优先读取环境变量代理或 Windows 系统代理，避免 OAuth token 交换直连失败。
 
 ## 快速开始
@@ -25,10 +25,11 @@
 3. 点击“管理登录”，在浏览器完成 OpenAI Codex OAuth 授权。
 4. 点击“测试连接”，确认本应用能访问 Codex。
 5. 在模型下拉框选择当前要使用的 Codex 模型。
-6. 点击“开启代理”。
-7. 在界面复制接口地址和 API Key，填入 WorkBuddy 自定义模式。
-8. 在 WorkBuddy 里发送测试消息。
-9. 不需要代理时，点击“停止代理”。
+6. 选择默认推理模式，未从 WorkBuddy 请求中收到推理模式时使用该默认值。
+7. 点击“开启代理”。
+8. 在界面复制接口地址和 API Key，填入 WorkBuddy 自定义模式。
+9. 在 WorkBuddy 里发送测试消息。
+10. 不需要代理时，点击“停止代理”。
 
 也可以在终端启动：
 
@@ -55,7 +56,8 @@ npm start
 {
   "接口地址": "http://127.0.0.1:8765/v1",
   "API Key": "wbp-示例代理密钥",
-  "模型": ["gpt-5.5", "gpt-5.4", "gpt-5.2"]
+  "模型": ["gpt-5.5", "gpt-5.4", "gpt-5.2"],
+  "默认推理模式": "medium"
 }
 ```
 
@@ -72,11 +74,12 @@ npm start
 运行日志会显示类似：
 
 ```text
-代理请求 a1b2c3d4：POST /v1/chat/completions，WorkBuddy模型=代理GPT，Codex模型=gpt-5.5，stream=false，messages=1
-代理返回 a1b2c3d4：HTTP 200，Codex模型=gpt-5.5，输出=18 字符，耗时=1234ms
+代理请求 a1b2c3d4：POST /v1/chat/completions，WorkBuddy模型=代理GPT，Codex模型=gpt-5.5，推理=中(默认)，stream=false，messages=1
+代理返回 a1b2c3d4：HTTP 200，Codex模型=gpt-5.5，推理=中(默认)，输出=18 字符，耗时=1234ms
 ```
 
 日志不会记录代理 API Key，也不会记录完整提示词内容。
+推理模式会优先使用 WorkBuddy 请求中的 `reasoning.effort`、`reasoning_effort` 或 `reasoningEffort`；未传时使用界面选择的默认推理模式。
 
 ## 支持接口
 

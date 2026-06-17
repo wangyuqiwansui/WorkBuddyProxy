@@ -11,3 +11,4 @@ auth.json
 .env.*
 !.env.example
 WorkBuddyProxy/
+.pnpm-store/

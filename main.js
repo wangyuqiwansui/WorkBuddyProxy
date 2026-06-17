@@ -9,6 +9,12 @@ const { URL, URLSearchParams } = require("node:url");
 const { resolveCodexModel } = require("./lib/modelResolver");
 const { proxyErrorLog, proxyRequestLog, proxyResponseLog } = require("./lib/proxyLog");
 const { createProxyState, ensureProxyConfig } = require("./lib/proxyState");
+const {
+  DEFAULT_REASONING_EFFORT,
+  REASONING_EFFORT_OPTIONS,
+  normalizeReasoningEffortValue,
+  resolveReasoningEffort,
+} = require("./lib/reasoningEffort");
 
 const APP_NAME = "WorkBuddyProxy";
 const CONFIG_DIR = path.join(process.env.APPDATA || os.homedir(), APP_NAME);
@@ -172,6 +178,11 @@ function saveConfig() {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf8");
 }
 
+function normalizeDefaultReasoningEffort(value) {
+  const normalized = normalizeReasoningEffortValue(value);
+  return REASONING_EFFORT_OPTIONS.some((option) => option.value === normalized) ? normalized : DEFAULT_REASONING_EFFORT;
+}
+
 function proxyConfig() {
   config.proxy ||= {};
   const proxy = config.proxy;
@@ -180,6 +191,7 @@ function proxyConfig() {
   proxy.upstream_base_url ||= "https://api.openai.com";
   proxy.models ||= DEFAULT_CODEX_MODELS;
   proxy.model_override ||= "";
+  proxy.reasoning_effort = normalizeDefaultReasoningEffort(proxy.reasoning_effort);
   if (Array.isArray(proxy.models) && proxy.models[0]?.startsWith?.("gpt-5.3-codex")) {
     proxy.models = DEFAULT_CODEX_MODELS;
   }
@@ -523,7 +535,9 @@ function isUnsupportedModelError(error) {
   return message.includes("model is not supported") || message.includes("not supported when using codex with a chatgpt account");
 }
 
-async function runCodexWithModel(model, developerInstructions, inputItems, onDelta, forceRefresh = false) {
+async function runCodexWithModel(model, developerInstructions, inputItems, onDelta, options = {}) {
+  const forceRefresh = Boolean(options.forceRefresh);
+  const effortValue = normalizeReasoningEffortValue(options.reasoningEffort?.value || options.reasoningEffort) || DEFAULT_REASONING_EFFORT;
   const accessToken = await getAccessToken(forceRefresh);
   const accountId = extractCodexAccountId(accessToken);
   const { instructions, messages } = buildCodexContext(developerInstructions, inputItems);
@@ -533,6 +547,7 @@ async function runCodexWithModel(model, developerInstructions, inputItems, onDel
     stream: true,
     instructions,
     input: messages,
+    reasoning: { effort: effortValue },
     text: { verbosity: "medium" },
     include: ["reasoning.encrypted_content"],
     tool_choice: "none",
@@ -557,7 +572,10 @@ async function runCodexWithModel(model, developerInstructions, inputItems, onDel
   if (!response.ok) {
     const errorText = await response.text();
     if ((response.status === 401 || response.status === 403) && !forceRefresh) {
-      return runCodexWithModel(model, developerInstructions, inputItems, onDelta, true);
+      return runCodexWithModel(model, developerInstructions, inputItems, onDelta, {
+        reasoningEffort: effortValue,
+        forceRefresh: true,
+      });
     }
     throw new Error(`OpenAI Codex 后端请求失败：HTTP ${response.status} ${errorText.slice(0, 500)}`);
   }
@@ -579,7 +597,7 @@ async function runCodexWithModel(model, developerInstructions, inputItems, onDel
   return chunks.join("").trim() || finalText.trim();
 }
 
-async function runCodex(model, developerInstructions, inputItems, onDelta) {
+async function runCodex(model, developerInstructions, inputItems, onDelta, reasoningEffort) {
   const candidates = [];
   for (const candidate of [model, ...CODEX_CHATGPT_FALLBACK_MODELS]) {
     if (candidate && !candidates.includes(candidate)) candidates.push(candidate);
@@ -588,7 +606,7 @@ async function runCodex(model, developerInstructions, inputItems, onDelta) {
   for (const candidate of candidates) {
     try {
       if (candidate !== model) log(`模型 ${model} 不受当前 ChatGPT Codex 账号支持，自动改用 ${candidate} 重试。`);
-      return await runCodexWithModel(candidate, developerInstructions, inputItems, onDelta);
+      return await runCodexWithModel(candidate, developerInstructions, inputItems, onDelta, { reasoningEffort });
     } catch (error) {
       lastError = error;
       if (!isUnsupportedModelError(error)) throw error;
@@ -662,6 +680,7 @@ async function handleProxyRequest(req, res) {
   try {
     const payload = JSON.parse((await readBody(req)) || "{}");
     const model = resolveCodexModel(proxy, payload.model);
+    const reasoningEffort = resolveReasoningEffort(payload, proxy.reasoning_effort);
     const messageCount = Array.isArray(payload.messages) ? payload.messages.length : Array.isArray(payload.input) ? payload.input.length : 1;
     log(proxyRequestLog({
       requestId,
@@ -669,6 +688,7 @@ async function handleProxyRequest(req, res) {
       pathname,
       payloadModel: payload.model,
       codexModel: model,
+      reasoningEffort,
       stream: Boolean(payload.stream),
       messageCount,
     }));
@@ -700,7 +720,7 @@ async function handleProxyRequest(req, res) {
             model,
             choices: [{ index: 0, delta: { content: delta }, finish_reason: null }],
           });
-        });
+        }, reasoningEffort);
         sendChunk({
           id: completionId,
           object: "chat.completion.chunk",
@@ -714,12 +734,13 @@ async function handleProxyRequest(req, res) {
           requestId,
           status: 200,
           codexModel: model,
+          reasoningEffort,
           textLength: streamedTextLength,
           durationMs: Date.now() - startedAt,
         }));
         return;
       }
-      const text = await runCodex(model, developerInstructions, inputItems);
+      const text = await runCodex(model, developerInstructions, inputItems, undefined, reasoningEffort);
       sendJson(res, 200, {
         id: `chatcmpl-${crypto.randomBytes(12).toString("base64url")}`,
         object: "chat.completion",
@@ -731,6 +752,7 @@ async function handleProxyRequest(req, res) {
         requestId,
         status: 200,
         codexModel: model,
+        reasoningEffort,
         textLength: String(text || "").length,
         durationMs: Date.now() - startedAt,
       }));
@@ -738,7 +760,7 @@ async function handleProxyRequest(req, res) {
     }
 
     const { developerInstructions, inputItems } = responseInputToCodexInput(payload);
-    const text = await runCodex(model, developerInstructions, inputItems);
+    const text = await runCodex(model, developerInstructions, inputItems, undefined, reasoningEffort);
     sendJson(res, 200, {
       id: `resp_${crypto.randomBytes(12).toString("base64url")}`,
       object: "response",
@@ -751,6 +773,7 @@ async function handleProxyRequest(req, res) {
       requestId,
       status: 200,
       codexModel: model,
+      reasoningEffort,
       textLength: String(text || "").length,
       durationMs: Date.now() - startedAt,
     }));
@@ -863,6 +886,8 @@ function appState() {
     account: details,
     models: proxy.models,
     selectedModel,
+    reasoningEfforts: REASONING_EFFORT_OPTIONS,
+    selectedReasoningEffort: proxy.reasoning_effort,
     endpoint: "https://chatgpt.com/backend-api",
     proxy: proxyState,
     proxyUrl: proxyState.apiUrl,
@@ -888,6 +913,18 @@ ipcMain.handle("app:setModel", (_event, model) => {
   return appState();
 });
 
+ipcMain.handle("app:setReasoningEffort", (_event, effort) => {
+  const proxy = proxyConfig();
+  const value = normalizeReasoningEffortValue(effort);
+  const option = REASONING_EFFORT_OPTIONS.find((item) => item.value === value);
+  if (option) {
+    proxy.reasoning_effort = option.value;
+    saveConfig();
+    log(`已切换默认推理模式：${option.label}`);
+  }
+  return appState();
+});
+
 ipcMain.handle("app:refreshModels", () => {
   const proxy = proxyConfig();
   proxy.models = DEFAULT_CODEX_MODELS;
@@ -900,10 +937,13 @@ ipcMain.handle("app:refreshModels", () => {
 ipcMain.handle("app:testConnection", async () => {
   const proxy = proxyConfig();
   const model = proxy.model_override || proxy.models[0];
+  const reasoningEffort = resolveReasoningEffort({}, proxy.reasoning_effort);
   const text = await runCodex(
     model,
     "You are a connectivity test endpoint. Reply with exactly OK.",
     [{ type: "text", text: "请只回复 OK，用于测试连接。" }],
+    undefined,
+    reasoningEffort,
   );
   if (!text) throw new Error("Codex 已响应，但没有返回文本。");
   log(`测试连接成功：Codex 返回 ${text.slice(0, 40)}`);
@@ -917,6 +957,7 @@ ipcMain.handle("app:copyConfig", () => {
     接口地址: proxyState.apiUrl,
     "API Key": proxyState.apiKey,
     模型: proxy.models,
+    默认推理模式: proxy.reasoning_effort,
   };
   clipboard.writeText(JSON.stringify(payload, null, 2));
   log(proxyState.running ? "WorkBuddy 配置已复制到剪贴板。" : "WorkBuddy 配置已复制；代理当前未开启。");

@@ -14,11 +14,12 @@ test("proxyRequestLog summarizes inbound WorkBuddy requests without API keys", (
     pathname: "/v1/chat/completions",
     payloadModel: "代理GPT",
     codexModel: "gpt-5.5",
+    reasoningEffort: { value: "medium", label: "中", defaulted: true },
     stream: false,
     messageCount: 1,
   });
 
-  assert.equal(line, "代理请求 abc123：POST /v1/chat/completions，WorkBuddy模型=代理GPT，Codex模型=gpt-5.5，stream=false，messages=1");
+  assert.equal(line, "代理请求 abc123：POST /v1/chat/completions，WorkBuddy模型=代理GPT，Codex模型=gpt-5.5，推理=中(默认)，stream=false，messages=1");
   assert.equal(line.includes("Bearer"), false);
   assert.equal(line.includes("wbp-"), false);
 });
@@ -29,10 +30,11 @@ test("proxyResponseLog shows success status, duration and output size", () => {
       requestId: "abc123",
       status: 200,
       codexModel: "gpt-5.5",
+      reasoningEffort: { value: "medium", label: "中", defaulted: true },
       textLength: 18,
       durationMs: 1234,
     }),
-    "代理返回 abc123：HTTP 200，Codex模型=gpt-5.5，输出=18 字符，耗时=1234ms",
+    "代理返回 abc123：HTTP 200，Codex模型=gpt-5.5，推理=中(默认)，输出=18 字符，耗时=1234ms",
   );
 });
 
