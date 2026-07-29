@@ -6,15 +6,18 @@ const {
   REASONING_EFFORT_OPTIONS,
   formatReasoningEffort,
   normalizeReasoningEffortValue,
+  reasoningEffortForModel,
   resolveReasoningEffort,
 } = require("../lib/reasoningEffort");
 
-test("reasoning effort options expose the four UI modes", () => {
+test("reasoning effort options expose every GPT-5.6 API mode", () => {
   assert.deepEqual(REASONING_EFFORT_OPTIONS, [
+    { value: "none", label: "无" },
     { value: "low", label: "低" },
     { value: "medium", label: "中" },
     { value: "high", label: "高" },
     { value: "xhigh", label: "超高" },
+    { value: "max", label: "最高" },
   ]);
   assert.equal(DEFAULT_REASONING_EFFORT, "medium");
 });
@@ -71,5 +74,15 @@ test("resolveReasoningEffort accepts Chinese labels and top-level reasoning_effo
 test("normalizeReasoningEffortValue returns canonical values for settings", () => {
   assert.equal(normalizeReasoningEffortValue("超高"), "xhigh");
   assert.equal(normalizeReasoningEffortValue("very_high"), "xhigh");
+  assert.equal(normalizeReasoningEffortValue("max"), "max");
+  assert.equal(normalizeReasoningEffortValue("ultra"), "max");
+  assert.equal(normalizeReasoningEffortValue("最高"), "max");
   assert.equal(normalizeReasoningEffortValue("bad-value"), "");
+});
+
+test("max reasoning is preserved for GPT-5.6 and downgraded for fallback models", () => {
+  assert.equal(reasoningEffortForModel("gpt-5.6", "max"), "max");
+  assert.equal(reasoningEffortForModel("gpt-5.6-sol", "max"), "max");
+  assert.equal(reasoningEffortForModel("gpt-5.5", "max"), "xhigh");
+  assert.equal(reasoningEffortForModel("gpt-5.5", "high"), "high");
 });

@@ -57,7 +57,7 @@ npm start
 {
   "接口地址": "http://127.0.0.1:8765/v1",
   "API Key": "wbp-示例代理密钥",
-  "模型": ["gpt-5.5", "gpt-5.4", "gpt-5.2"],
+  "模型": ["gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
   "默认推理模式": "medium"
 }
 ```
@@ -81,6 +81,9 @@ npm start
 
 日志不会记录代理 API Key，也不会记录完整提示词内容。
 推理模式会优先使用 WorkBuddy 请求中的 `reasoning.effort`、`reasoning_effort` 或 `reasoningEffort`；未传时使用界面选择的默认推理模式。
+默认推理模式提供 `none`、`low`、`medium`、`high`、`xhigh`、`max` 六档。GPT-5.6 可直接使用 `max`；如果请求回退到旧模型，`max` 会兼容为 `xhigh` 并写入日志。
+
+“刷新模型”会同步应用内维护的 Codex 候选模型目录。模型出现在下拉框不代表当前 ChatGPT 账号已经获得调用权限；如果所选模型尚未对账号开放，代理会记录提示并自动回退到受支持的模型。
 
 ## 支持接口
 
@@ -170,6 +173,7 @@ node --check preload.js
 node --check renderer\renderer.js
 node --check lib\proxyState.js
 node --check lib\modelResolver.js
+node --check lib\codexModels.js
 node --check lib\proxyLog.js
 ```
 

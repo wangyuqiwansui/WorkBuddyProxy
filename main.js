@@ -6,6 +6,11 @@ const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const { URL, URLSearchParams } = require("node:url");
+const {
+  CODEX_CHATGPT_FALLBACK_MODELS,
+  DEFAULT_CODEX_MODELS,
+  mergeDefaultCodexModels,
+} = require("./lib/codexModels");
 const { resolveCodexModel } = require("./lib/modelResolver");
 const { proxyErrorLog, proxyRequestLog, proxyResponseLog } = require("./lib/proxyLog");
 const { createProxyState, ensureProxyConfig } = require("./lib/proxyState");
@@ -13,6 +18,7 @@ const {
   DEFAULT_REASONING_EFFORT,
   REASONING_EFFORT_OPTIONS,
   normalizeReasoningEffortValue,
+  reasoningEffortForModel,
   resolveReasoningEffort,
 } = require("./lib/reasoningEffort");
 const {
@@ -26,18 +32,6 @@ const APP_NAME = "WorkBuddyProxy";
 const CONFIG_DIR = path.join(process.env.APPDATA || os.homedir(), APP_NAME);
 const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
 const CODEX_AUTO_MODE = "codex_auto";
-const DEFAULT_CODEX_MODELS = [
-  "gpt-5.5",
-  "gpt-5.4",
-  "gpt-5.2",
-  "gpt-5.2-codex",
-  "gpt-5.1",
-  "gpt-5.1-codex-max",
-  "gpt-5.1-codex-mini",
-  "gpt-5.3-codex",
-  "gpt-5.3-codex-spark",
-];
-const CODEX_CHATGPT_FALLBACK_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.2", "gpt-5.2-codex", "gpt-5.1"];
 const CODEX_BACKEND_URL = "https://chatgpt.com/backend-api/codex/responses";
 const CODEX_OAUTH_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
 const CODEX_OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token";
@@ -195,7 +189,7 @@ function proxyConfig() {
   ensureProxyConfig(proxy);
   proxy.route_mode ||= CODEX_AUTO_MODE;
   proxy.upstream_base_url ||= "https://api.openai.com";
-  proxy.models ||= DEFAULT_CODEX_MODELS;
+  proxy.models = mergeDefaultCodexModels(proxy.models);
   proxy.model_override ||= "";
   proxy.reasoning_effort = normalizeDefaultReasoningEffort(proxy.reasoning_effort);
   if (Array.isArray(proxy.models) && proxy.models[0]?.startsWith?.("gpt-5.3-codex")) {
@@ -557,7 +551,11 @@ function isUnsupportedModelError(error) {
 
 async function runCodexWithModel(model, developerInstructions, inputItems, onDelta, options = {}) {
   const forceRefresh = Boolean(options.forceRefresh);
-  const effortValue = normalizeReasoningEffortValue(options.reasoningEffort?.value || options.reasoningEffort) || DEFAULT_REASONING_EFFORT;
+  const requestedEffortValue = normalizeReasoningEffortValue(options.reasoningEffort?.value || options.reasoningEffort) || DEFAULT_REASONING_EFFORT;
+  const effortValue = reasoningEffortForModel(model, requestedEffortValue);
+  if (effortValue !== requestedEffortValue) {
+    log(`模型 ${model} 不支持推理模式 max，已兼容为 xhigh。`);
+  }
   const toolOptions = options.toolOptions || {};
   const hasTools = Boolean(toolOptions.hasTools);
   const accessToken = await getAccessToken(forceRefresh);
@@ -988,7 +986,7 @@ ipcMain.handle("app:refreshModels", () => {
   proxy.models = DEFAULT_CODEX_MODELS;
   if (!proxy.models.includes(proxy.model_override)) proxy.model_override = proxy.models[0];
   saveConfig();
-  log(`已同步 direct Codex 默认模型列表：${proxy.models.length} 个。`);
+  log(`已同步 direct Codex 默认模型列表：${proxy.models.length} 个；默认推理模式：${REASONING_EFFORT_OPTIONS.length} 档。`);
   return appState();
 });
 
